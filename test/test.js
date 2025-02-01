@@ -1,21 +1,38 @@
-// test/test.js
+/**
+ * @fileoverview Unit tests for the Cost Manager API using Mocha, Chai, and Supertest.
+ * This file tests the following endpoints:
+ *   - GET /api/about: Retrieves team member information.
+ *   - GET /api/users/:id: Retrieves details of a specific user along with total cost.
+ *   - POST /api/add: Adds a new cost item.
+ *   - GET /api/report: Retrieves a monthly report with cost items grouped by category.
+ *
+ * The tests also handle database setup/cleanup using Mongoose.
+ *
+ * @module test/test
+ */
 
 const request = require('supertest');
 
-// שימוש ב‑Chai – מכיוון שגרסת Chai שברשותך היא ESM, ננסה להשתמש במאפיין default אם קיים
+// Import Chai for assertions. In case the default property is available (for ESM), use it.
 const chaiImported = require('chai');
-const expect = (chaiImported && chaiImported.default && chaiImported.default.expect) ? chaiImported.default.expect : chaiImported.expect;
+const expect = (chaiImported && chaiImported.default && chaiImported.default.expect)
+  ? chaiImported.default.expect
+  : chaiImported.expect;
 
 const mongoose = require('mongoose');
-const app = require('../app'); // ודאי ש‑app.js נמצא במבנה CommonJS (עם require ו‑module.exports)
+const app = require('../app'); // Ensure that app.js is in CommonJS format (using require and module.exports)
 
-// ייבוא המודלים לצורך ניקוי והכנסת נתונים
+// Import models to clear and seed test data
 const User = require('../models/User');
 const Cost = require('../models/Cost');
 
 describe('Cost Manager API Unit Tests', function () {
 
-  // התחברות למסד הנתונים לפני כל הבדיקות
+  /**
+   * Connects to the MongoDB database before running any tests.
+   * @function before
+   * @param {Function} done - Callback to indicate completion.
+   */
   before(function (done) {
     mongoose
       .connect(process.env.MONGO_URI, {
@@ -26,12 +43,16 @@ describe('Cost Manager API Unit Tests', function () {
       .catch((err) => done(err));
   });
 
-  // ניקוי בסיס הנתונים והכנסת המשתמש המדומה לפני כל בדיקה
+  /**
+   * Cleans the database and inserts a test user before each test.
+   * @async
+   * @function beforeEach
+   */
   beforeEach(async function () {
     await User.deleteMany({});
     await Cost.deleteMany({});
 
-    // הכנסת המשתמש המדומה לפי הדרישה
+    // Insert a test user as required by the API endpoints.
     const testUser = new User({
       id: "123123",
       first_name: "mosh",
@@ -42,14 +63,21 @@ describe('Cost Manager API Unit Tests', function () {
     await testUser.save();
   });
 
-  // סגירת החיבור למסד הנתונים לאחר כל הבדיקות
+  /**
+   * Closes the MongoDB connection after all tests have run.
+   * @function after
+   * @param {Function} done - Callback to indicate completion.
+   */
   after(function (done) {
     mongoose.connection.close()
       .then(() => done())
       .catch((err) => done(err));
   });
 
-  // בדיקה של נתיב /api/about
+  /**
+   * Tests the GET /api/about endpoint.
+   * Expects the response to be an array of team members with "first_name" and "last_name" properties.
+   */
   describe('GET /api/about', function () {
     it('should return the team members with first_name and last_name only', function (done) {
       request(app)
@@ -68,7 +96,10 @@ describe('Cost Manager API Unit Tests', function () {
     });
   });
 
-  // בדיקה של נתיב /api/users/:id
+  /**
+   * Tests the GET /api/users/:id endpoint.
+   * Expects the response to include the user's id, first_name, last_name, and total cost.
+   */
   describe('GET /api/users/:id', function () {
     it('should return the details of the specified user including total cost', function (done) {
       request(app)
@@ -86,7 +117,16 @@ describe('Cost Manager API Unit Tests', function () {
     });
   });
 
-  // בדיקה של נתיב /api/add
+  /**
+   * Tests the POST /api/add endpoint.
+   * Expects to add a new cost item and receive the created item in the response.
+   *
+   * Required fields in the request body:
+   *   - userid: "123123"
+   *   - description: "test cost item"
+   *   - category: "food"
+   *   - sum: 15
+   */
   describe('POST /api/add', function () {
     it('should add a new cost item and return the created cost item', function (done) {
       const costData = {
@@ -112,17 +152,21 @@ describe('Cost Manager API Unit Tests', function () {
     });
   });
 
-  // בדיקה של נתיב /api/report
+  /**
+   * Tests the GET /api/report endpoint.
+   * First, adds two cost items. Then, requests a monthly report for the test user.
+   * Expects the report to include the cost items grouped by category.
+   */
   describe('GET /api/report', function () {
     it('should return a monthly report with cost items grouped by category', async function () {
-      // הוספת שני פריטי עלות לדוגמא
+      // Add two cost items as sample data.
       const cost1 = { userid: "123123", description: "cost one", category: "food", sum: 10 };
       const cost2 = { userid: "123123", description: "cost two", category: "food", sum: 20 };
 
       await request(app).post('/api/add').send(cost1).expect(201);
       await request(app).post('/api/add').send(cost2).expect(201);
 
-      // בקשת דוח עבור המשתמש 123123, שנה 2025 וחודש 2
+      // Request the report for user 123123 for year 2025 and month 2.
       const res = await request(app)
         .get('/api/report')
         .query({ id: "123123", year: "2025", month: "2" })
@@ -134,15 +178,14 @@ describe('Cost Manager API Unit Tests', function () {
       expect(report).to.have.property('month', 2);
       expect(report).to.have.property('costs').that.is.an('array');
 
-      // בדיקה שבקטגוריית "food" יש את שני הפריטים שהוספנו
+      // Verify that the "food" category includes the two cost items.
       const foodCategory = report.costs.find(item => item.food);
       expect(foodCategory).to.exist;
       expect(foodCategory.food).to.be.an('array').with.lengthOf(2);
-      // בדיקת הסכום הכולל בקטגוריית "food"
+      // Verify the total cost in the "food" category is equal to 30.
       const totalFoodCost = foodCategory.food.reduce((sum, item) => sum + item.sum, 0);
       expect(totalFoodCost).to.equal(30);
     });
   });
 
 });
-
