@@ -6,7 +6,7 @@
  *
  * Usage:
  *   Run the script with Node.js:
- *     $ node testReport.js
+ *     $ node test_report.js
  *
  * Note: Ensure that the .env file contains the correct MONGO_URI.
  *
@@ -18,7 +18,7 @@ const dotenv = require('dotenv');
 dotenv.config();
 
 // Import the Report model
-const Report = require('./models/Report');
+const Report = require('./models/report');
 
 /**
  * Connects to MongoDB and then runs the report model test.
